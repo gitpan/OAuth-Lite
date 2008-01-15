@@ -1,0 +1,24 @@
+abstract: OAuth framework
+author: Lyo Kato, C<lyo.kato _at_ gmail.com>
+build_requires: 
+  Test::More: 0
+distribution_type: module
+generated_by: Module::Install version 0.64
+license: perl
+name: OAuth-Lite
+no_index: 
+  directory: 
+    - inc
+    - t
+requires: 
+  Class::Accessor: 0.31
+  Class::Data::Accessor: 0.04001
+  Class::ErrorHandler: 0.01
+  Crypt::OpenSSL::RSA: 0.25
+  Crypt::OpenSSL::Random: 0.04
+  Digest::SHA: 5.45
+  List::MoreUtils: 0.21
+  MIME::Base64: 3.07
+  UNIVERSAL::require: 0.11
+  URI: 1.35
+version: 1.01
