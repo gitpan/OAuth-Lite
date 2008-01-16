@@ -5,7 +5,7 @@ use warnings;
 
 use base 'OAuth::Lite::Server::mod_perl2';
 
-use bytes;
+use bytes ();
 use OAuth::Lite::Token;
 
 my $CONSUMER_KEY         = 'key';

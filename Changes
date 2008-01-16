@@ -1,5 +1,8 @@
 Revision history for Perl extension OAuth::Lite.
 
+1.04  Tue Jan 16 15:30:00 2008
+	- fixed not to import methods when require bytes
+
 1.03  Tue Jan 16 14:22:00 2008
   - added delegation methods on ServerUtil
 
