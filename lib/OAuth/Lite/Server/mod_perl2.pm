@@ -47,8 +47,8 @@ See it.
 
     sub init {
         my $self = shift;
-        $self->allow_extra_params(qw/file size/);
-        $self->support_signature_methods(qw/HMAC-SHA1 PLAINTEXT/);
+        $self->oauth->allow_extra_params(qw/file size/);
+        $self->oauth->support_signature_methods(qw/HMAC-SHA1 PLAINTEXT/);
     }
 
     sub get_request_token_secret {
@@ -293,6 +293,23 @@ The realm value you set in httpd.conf by PerlSetVar.
 =head2 oauth
 
 Returns l<OAuth::Lite::ServerUtil> object.
+
+=head2 allow_extra_param
+
+=head2 allow_extra_params
+
+=head2 support_signature_method
+
+=head2 support_signature_methods
+
+These methods are just only delegate methods.
+For example, 
+
+    $self->allow_extra_param('foo');
+
+is same as
+
+    $self->oauth->allow_extra_param('foo');
 
 =head2 request_body
 
@@ -580,6 +597,27 @@ sub errout {
     $self->request->print($message);
     return Apache2::Const::OK;
 }
+
+sub allow_extra_param {
+    my $self = shift;
+    $self->oauth->allow_extra_param(@_);
+}
+
+sub allow_extra_params {
+    my $self = shift;
+    $self->oauth->allow_extra_params(@_);
+}
+
+sub support_signature_method {
+    my $self = shift;
+    $self->oauth->support_signature_method(@_);
+}
+
+sub support_signature_methods {
+    my $self = shift;
+    $self->oauth->support_signature_methods(@_);
+}
+
 
 =head1 SEE ALSO
 

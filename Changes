@@ -1,5 +1,12 @@
 Revision history for Perl extension OAuth::Lite.
 
+1.03  Tue Jan 16 14:22:00 2008
+  - added delegation methods on ServerUtil
+
+1.02  Tue Jan 16 13:50:00 2008
+  - fixed document
+	- fixed Makefile.PL
+
 1.01  Tue Jan 15 11:14:00 2008
   - improved documentation
 
