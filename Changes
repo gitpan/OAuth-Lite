@@ -1,18 +1,21 @@
 Revision history for Perl extension OAuth::Lite.
 
-1.04  Tue Jan 16 15:30:00 2008
-	- fixed not to import methods when require bytes
+1.05  Thu Jan 17 10:15:00 2008
+  - added inc/Module/Install to MANIFEST
 
-1.03  Tue Jan 16 14:22:00 2008
+1.04  Wed Jan 16 15:30:00 2008
+  - fixed not to import methods when require bytes
+
+1.03  Wed Jan 16 14:22:00 2008
   - added delegation methods on ServerUtil
 
-1.02  Tue Jan 16 13:50:00 2008
+1.02  Wed Jan 16 13:50:00 2008
   - fixed document
-	- fixed Makefile.PL
+  - fixed Makefile.PL
 
 1.01  Tue Jan 15 11:14:00 2008
   - improved documentation
 
 1.00  Tue Jan  8 17:54:29 2008
-	- initial release
+  - initial release
 

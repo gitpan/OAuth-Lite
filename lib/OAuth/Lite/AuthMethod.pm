@@ -16,7 +16,8 @@ use constant URL_QUERY   => 'url_query';
 
 sub validate_method {
     my ($class, $method) = @_;
-    any { $method eq $_ } (AUTH_HEADER, POST_BODY, URL_QUERY);
+    my @methods = (AUTH_HEADER, POST_BODY, URL_QUERY);
+    any { $method eq $_ } @methods;
 }
 
 1;

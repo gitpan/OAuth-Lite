@@ -3,6 +3,16 @@ examples/echo_client.pl
 examples/generate_rsa_keys.pl
 examples/spec.pl
 examples/termie.pl
+inc/Module/Install.pm
+inc/Module/Install/Base.pm
+inc/Module/Install/Can.pm
+inc/Module/Install/Fetch.pm
+inc/Module/Install/Include.pm
+inc/Module/Install/Makefile.pm
+inc/Module/Install/Metadata.pm
+inc/Module/Install/Win32.pm
+inc/Module/Install/WriteAll.pm
+inc/Test/More.pm
 lib/OAuth/Lite.pm
 lib/OAuth/Lite/AuthMethod.pm
 lib/OAuth/Lite/Consumer.pm
@@ -17,7 +27,6 @@ lib/OAuth/Lite/Token.pm
 lib/OAuth/Lite/Util.pm
 Makefile.PL
 MANIFEST
-MANIFEST.SKIP
 META.yml
 README
 t/00_load.t
