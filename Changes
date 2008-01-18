@@ -1,5 +1,9 @@
 Revision history for Perl extension OAuth::Lite.
 
+1.06  Fri Jan 18 18:28:00 2008
+	- changed not to use syntax like 'any {...} qw/FOO BAR/'.
+	  it seems to cause error on perl5.6
+
 1.05  Thu Jan 17 10:15:00 2008
   - added inc/Module/Install to MANIFEST
 

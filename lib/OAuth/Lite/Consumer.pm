@@ -510,13 +510,15 @@ sub gen_oauth_request {
         $headers = HTTP::Headers->new;
     }
 
-    if (any { $method eq $_ } qw/POST PUT/) {
+		my @send_data_methods = qw/POST PUT/;
+		my @non_send_data_methods = qw/GET HEAD DELETE/;
+    if (any { $method eq $_ } @send_data_methods) {
         $headers->header('Content-Type', q{application/x-www-form-urlencoded})
             unless $headers->header('Content-Type');
     }
 
     my $auth_method = $self->{auth_method};
-    if (any { $method eq $_ } qw/GET HEAD DELETE/) {
+    if (any { $method eq $_ } @non_send_data_methods) {
         $auth_method = AUTH_HEADER
             unless $auth_method eq URL_QUERY; 
     } else { # POST or PUT
@@ -537,7 +539,7 @@ sub gen_oauth_request {
         if (keys %$extra > 0) {
             my $data = join('&', map(sprintf(q{%s=%s},
                 encode_param($_), encode_param($extra->{$_}) ), keys %$extra));
-            if (any { $method eq $_ } qw/POST PUT/) {
+            if (any { $method eq $_ } @send_data_methods) {
                 $content = $data;
             } else {
                 $url = sprintf q{%s?%s}, $url, $data;
