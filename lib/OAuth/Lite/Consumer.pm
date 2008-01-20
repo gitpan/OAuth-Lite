@@ -669,7 +669,7 @@ sub gen_auth_query {
     $extra ||= {};
     my $params = $self->gen_auth_params($method, $url, $token);
     my %all = (%$extra, %$params);
-    my $query = join('&',
+    my $query = join('&', sort { $a cmp $b } 
         map(sprintf(q{%s=%s}, encode_param($_), encode_param($all{$_})),
         keys %all));
     $query;

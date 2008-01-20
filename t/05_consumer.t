@@ -117,13 +117,13 @@ like($oauth_params2->{oauth_timestamp}, qr/^\d+$/, 'collect timestamp');
 like($oauth_params2->{oauth_nonce}, qr/^[a-fA-F0-9]+$/, 'collect timestamp');
 
 my $auth_query1 = $c6->gen_auth_query('GET', q{http://example.org/});
-like($auth_query1, qr{oauth_signature=[^\&]+&oauth_timestamp=\d+&oauth_consumer_key=key&oauth_nonce=[a-fA-F0-9]+&oauth_version=1.0&oauth_signature_method=HMAC-SHA1}, 'gen_auth_query works as expected');
+like($auth_query1, qr{oauth_consumer_key=key&oauth_nonce=[a-fA-F0-9]+&oauth_signature=[^\&]+&oauth_signature_method=HMAC-SHA1&oauth_timestamp=\d+&oauth_version=1.0}, 'gen_auth_query works as expected');
 my $auth_query2 = $c6->gen_auth_query('GET', q{http://example.org/}, $atoken);
-like($auth_query2, qr{oauth_signature=[^\&]+&oauth_timestamp=\d+&oauth_consumer_key=key&oauth_nonce=[a-fA-F0-9]+&oauth_version=1.0&oauth_signature_method=HMAC-SHA1}, 'gen_auth_query works as expected');
+like($auth_query2, qr{oauth_consumer_key=key&oauth_nonce=[a-fA-F0-9]+&oauth_signature=[^\&]+&oauth_signature_method=HMAC-SHA1&oauth_timestamp=\d+&oauth_version=1.0}, 'gen_auth_query works as expected');
 my $auth_query3 = $c6->gen_auth_query('GET', q{http://example.org/}, undef, { extra => 'foo' });
-like($auth_query3, qr{oauth_signature=[^\&]+&oauth_timestamp=\d+&oauth_consumer_key=key&oauth_nonce=[a-fA-F0-9]+&extra=foo&oauth_version=1.0&oauth_signature_method=HMAC-SHA1}, 'gen_auth_query works as expected');
+like($auth_query3, qr{extra=foo&oauth_consumer_key=key&oauth_nonce=[a-fA-F0-9]+&oauth_signature=[^\&]+&oauth_signature_method=HMAC-SHA1&oauth_timestamp=\d+&oauth_version=1.0}, 'gen_auth_query works as expected');
 my $auth_query4 = $c6->gen_auth_query('GET', q{http://example.org/}, $atoken, { extra => 'foo' });
-like($auth_query4, qr{oauth_signature=[^\&]+&oauth_timestamp=\d+&oauth_consumer_key=key&oauth_nonce=[a-fA-F0-9]+&extra=foo&oauth_version=1.0&oauth_signature_method=HMAC-SHA1}, 'gen_auth_query works as expected');
+like($auth_query4, qr{extra=foo&oauth_consumer_key=key&oauth_nonce=[a-fA-F0-9]+&oauth_signature=[^\&]+&oauth_signature_method=HMAC-SHA1&oauth_timestamp=\d+&oauth_version=1.0}, 'gen_auth_query works as expected');
 
 =pod
 

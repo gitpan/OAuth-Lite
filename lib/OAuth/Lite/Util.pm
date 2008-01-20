@@ -207,7 +207,7 @@ sub build_auth_header {
     my ($realm, $params) = @_;
     my $head = sprintf q{OAuth realm="%s"}, $realm || '';
     my $authorization_header = join(', ', $head,
-        map(sprintf(q{%s="%s"}, encode_param($_), encode_param($params->{$_})),
+        sort { $a cmp $b } map(sprintf(q{%s="%s"}, encode_param($_), encode_param($params->{$_})),
             grep { /^oauth_/ || /^xoauth_/ } keys %$params));
     $authorization_header;
 }

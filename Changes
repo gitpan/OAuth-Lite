@@ -1,5 +1,10 @@
 Revision history for Perl extension OAuth::Lite.
 
+1.07  Sun Jan 20 15:12:00 2008
+	- put sorting process into building query-string process.
+	  The hash keys order is deferrent between perl environments.
+		So, some tests failed.
+
 1.06  Fri Jan 18 18:28:00 2008
 	- changed not to use syntax like 'any {...} qw/FOO BAR/'.
 	  it seems to cause error on perl5.6
