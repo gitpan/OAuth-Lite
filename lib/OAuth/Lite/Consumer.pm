@@ -22,6 +22,7 @@ __PACKAGE__->mk_accessors(qw(
 *oauth_res = \&oauth_response;
 
 use Carp ();
+use bytes ();
 use URI;
 use HTTP::Request;
 use HTTP::Headers;
@@ -510,12 +511,8 @@ sub gen_oauth_request {
         $headers = HTTP::Headers->new;
     }
 
-		my @send_data_methods = qw/POST PUT/;
-		my @non_send_data_methods = qw/GET HEAD DELETE/;
-    if (any { $method eq $_ } @send_data_methods) {
-        $headers->header('Content-Type', q{application/x-www-form-urlencoded})
-            unless $headers->header('Content-Type');
-    }
+    my @send_data_methods = qw/POST PUT/;
+    my @non_send_data_methods = qw/GET HEAD DELETE/;
 
     my $auth_method = $self->{auth_method};
     if (any { $method eq $_ } @non_send_data_methods) {
@@ -545,6 +542,11 @@ sub gen_oauth_request {
                 $url = sprintf q{%s?%s}, $url, $data;
             }
         }
+    }
+    if (any { $method eq $_ } @send_data_methods) {
+        $headers->header('Content-Type', q{application/x-www-form-urlencoded})
+            unless $headers->header('Content-Type');
+        $headers->header('Content-Length', bytes::length($content) );
     }
     my $req = HTTP::Request->new( $method, $url, $headers, $content );
     $req;

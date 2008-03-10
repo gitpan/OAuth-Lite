@@ -1,5 +1,11 @@
 Revision history for Perl extension OAuth::Lite.
 
+1.08  Mon Mar 10 16:03:00 2008
+    - rt #33943
+      added Content-Length header in case request method is POST or PUT,
+      at the end of Consumer::gen_oauth_request.
+      Thanks, TOMI.
+
 1.07  Sun Jan 20 15:12:00 2008
 	- put sorting process into building query-string process.
 	  The hash keys order is deferrent between perl environments.
