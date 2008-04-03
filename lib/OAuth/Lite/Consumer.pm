@@ -355,7 +355,8 @@ sub url_to_authorize {
         or Carp::croak qq/url_to_authorize needs url./;
     my %params = ();
     $params{oauth_callback} = $args{callback_url} if $args{callback_url};
-    if (my $token = $args{token}) {
+    if (defined $args{token}) {
+        my $token = $args{token};
         $params{oauth_token} = ( eval { $token->isa('OAuth::Lite::Token') } )
             ? $token->token
             : $token;
@@ -451,11 +452,10 @@ Request token object.
 sub get_access_token {
     my ($self, %args) = @_;
     $args{url} ||= $self->access_token_url;
-    $args{token} ||= $self->request_token;
     my $access_token_url = $args{url}
         or Carp::croak qq/get_access_token needs access_token_url./;
-    my $token = $args{token}
-        or Carp::croak qq/get_access_token needs token./;
+    my $token = defined $args{token} ? $args{token} : $self->request_token;
+    Carp::croak qq/get_access_token needs token./ unless defined $token;
     my $realm = $args{realm} || $self->{realm} || '';
     my $res = $self->__request(
         realm => $realm,
@@ -709,13 +709,16 @@ sub gen_auth_params {
     $params->{oauth_timestamp} = time();
     $params->{oauth_nonce} = gen_random_key();
     $params->{oauth_version} = $OAuth::Lite::OAUTH_DEFAULT_VERSION;
+    my $token_secret = '';
     if (defined $token) {
-        $params->{oauth_token} = ( eval { $token->isa('OAuth::Lite::Token') } )
-            ? $token->token
-            : $token;
+        if (eval { $token->isa('OAuth::Lite::Token') }) {
+            $params->{oauth_token} = $token->token;
+            $token_secret = $token->secret;
+        } else {
+            $params->{oauth_token} = $token;
+        }
     }
     my $consumer_secret = $self->consumer_secret || '';
-    my $token_secret = defined $token ? $token->secret : '';
     $params->{oauth_signature_method} = $self->{signature_method}->method_name;
     if ($params->{oauth_signature_method} eq 'PLAINTEXT' && lc($url) !~ /^https/) {
         warn qq(PLAINTEXT signature method should be used on SSL/TSL.);

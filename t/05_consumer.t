@@ -1,4 +1,4 @@
-use Test::More tests => 38;
+use Test::More tests => 54;
 
 use URI::Escape;
 use OAuth::Lite::Consumer;
@@ -83,6 +83,9 @@ my $enc_callback_url = URI::Escape::uri_escape($callback_url);
 my $auth_url3 = $c5->url_to_authorize( callback_url => $callback_url );
 is( $auth_url3, qq{http://example2.org/path/to/authorize?oauth_callback=$enc_callback_url} );
 
+my $auth_url4 = $c5->url_to_authorize( token => '' );
+is ($auth_url4, q{http://example2.org/path/to/authorize?oauth_token=}, 'url_to_authorize works as expected.');
+
 my $c6 = OAuth::Lite::Consumer->new(
 	consumer_key       => $consumer_key,
 	consumer_secret    => $consumer_secret,
@@ -93,8 +96,8 @@ my $c6 = OAuth::Lite::Consumer->new(
 	callback_url       => $callback_url,
 );
 
-my $auth_url4 = $c6->url_to_authorize( token => $atoken1 );
-is( $auth_url4, qq{http://example2.org/path/to/authorize?oauth_callback=$enc_callback_url&oauth_token=foo} );
+my $auth_url5 = $c6->url_to_authorize( token => $atoken1 );
+is( $auth_url5, qq{http://example2.org/path/to/authorize?oauth_callback=$enc_callback_url&oauth_token=foo} );
 
 my $oauth_params1 = $c6->gen_auth_params('GET', 'http://example.org/');
 ok(!exists $oauth_params1->{oauth_token}, "oauth_token shouldn't be included");
@@ -115,6 +118,27 @@ is($oauth_params2->{oauth_token}, 'foo', 'collect token');
 is($oauth_params2->{oauth_version}, '1.0', 'collect version');
 like($oauth_params2->{oauth_timestamp}, qr/^\d+$/, 'collect timestamp');
 like($oauth_params2->{oauth_nonce}, qr/^[a-fA-F0-9]+$/, 'collect timestamp');
+
+my $oauth_params3 = $c6->gen_auth_params('POST', 'http://example.org/', '');
+ok(exists $oauth_params3->{oauth_token}, "oauth_token should be included");
+ok(exists $oauth_params3->{oauth_signature}, 'signature is set');
+is($oauth_params3->{oauth_consumer_key}, $consumer_key, 'collect consumer_key');
+is($oauth_params3->{oauth_signature_method}, 'HMAC-SHA1', 'collect signature method');
+#is($oauth_params2->{oauth_signature}, 'HMAC-SHA1', 'collect signature');
+is($oauth_params3->{oauth_token}, '', 'collect token');
+is($oauth_params3->{oauth_version}, '1.0', 'collect version');
+like($oauth_params3->{oauth_timestamp}, qr/^\d+$/, 'collect timestamp');
+like($oauth_params3->{oauth_nonce}, qr/^[a-fA-F0-9]+$/, 'collect timestamp');
+
+my $oauth_params4 = $c6->gen_auth_params('POST', 'http://example.org/');
+ok(!exists $oauth_params4->{oauth_token}, "oauth_token shouldn't be included");
+ok(exists $oauth_params4->{oauth_signature}, 'signature is set');
+is($oauth_params4->{oauth_consumer_key}, $consumer_key, 'collect consumer_key');
+is($oauth_params4->{oauth_signature_method}, 'HMAC-SHA1', 'collect signature method');
+#is($oauth_params2->{oauth_signature}, 'HMAC-SHA1', 'collect signature');
+is($oauth_params4->{oauth_version}, '1.0', 'collect version');
+like($oauth_params4->{oauth_timestamp}, qr/^\d+$/, 'collect timestamp');
+like($oauth_params4->{oauth_nonce}, qr/^[a-fA-F0-9]+$/, 'collect timestamp');
 
 my $auth_query1 = $c6->gen_auth_query('GET', q{http://example.org/});
 like($auth_query1, qr{oauth_consumer_key=key&oauth_nonce=[a-fA-F0-9]+&oauth_signature=[^\&]+&oauth_signature_method=HMAC-SHA1&oauth_timestamp=\d+&oauth_version=1.0}, 'gen_auth_query works as expected');

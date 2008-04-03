@@ -1,5 +1,9 @@
 Revision history for Perl extension OAuth::Lite.
 
+1.09  Mon Mar 31 15:47:00 2008
+    - Consumer::url_to_authorize and Consumer::get_access_token now can handles
+      empty token.
+
 1.08  Mon Mar 10 16:03:00 2008
     - rt #33943
       added Content-Length header in case request method is POST or PUT,
