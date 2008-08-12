@@ -145,7 +145,7 @@ See it.
     }
 
     sub service {
-        my ($self, $params) = @_;
+        my $self = shift;
     }
 
 in httpd.conf
@@ -249,13 +249,14 @@ create new access-token, and save it,
 and returns it as L<OAuth::Lite::Token> object.
 And disables the exchanged request-token.
 
-=head2 service($params)
+=head2 service
 
 Handle protected resource.
 This method should returns Apache2::Const::OK.
 
     sub service {
-        my ($self, $params) = @_;
+        my $self = shift;
+        my $params = $self->{params};
         my $token_string = $params->{oauth_token};
         my $access_token = MyDB::Scheme->resultset('RequestToken')->find($token_string);
         my $user = $access_token->author;
@@ -311,6 +312,16 @@ is same as
 
     $self->oauth->allow_extra_param('foo');
 
+=head2 request_method
+
+Request method (Upper Case).
+When the raw request method is POST and X-HTTP-Method-Override is define in header,
+return the value of X-HTTP-Method-Override.
+
+=head2 request_uri
+
+Returns request uri
+
 =head2 request_body
 
 Requets body data when the request's http-method is POST or PUT
@@ -318,6 +329,68 @@ Requets body data when the request's http-method is POST or PUT
 =head2 set_authenticate_header
 
 Set proper 'WWW-Authentication' response header
+
+=head2 is_required_request_token
+
+Check if current request requires request-token.
+
+=head2 is_required_access_token
+
+Check if current request requires access-token.
+
+=head2 is_required_protected_resource
+
+Check if current request requires protected-resource.
+
+=head2 is_consumer_request
+
+Chekc is the server accepts consumer-request and
+the request is for protected resource without token.
+
+=head2 accepts_consumer_request
+
+You can adopt OAuth Consumer Request 1.0.
+
+See http://oauth.googlecode.com/svn/spec/ext/consumer_request/1.0/drafts/1/spec.html
+
+To adopt this spec, you have to set var 'AcceptConsumerRequest' on httpd.conf
+
+	<Location /resource>
+	PerlSetVar Mode PROTECTED_RESOURCE
+	PerlSetVar AcceptConsumerRequest 1
+	PerlResponseHandler MyServiceWithOAuth
+	</Location>
+
+Then override service method for protected resource.
+
+	sub service {
+		my $self = shift;
+        my $params = $self->{params};
+
+		my $resource_owner_id;
+
+		if (exists $params->{oauth_token}) {
+
+			my $access_token_value = $params->{oauth_token};
+			$resource_owner_id = $self->get_user_id_of_access_token($access_token_value);
+
+		} else {
+
+			my $consumer_key = $params->{oauth_consumer_key};
+			$resource_owner_id = $self->get_user_id_of_consumer_developer($consumer_key);
+
+		}
+
+		my @resources = MyDB::Scheme->resultset('SomeResource')->search({
+				user_id => $resource_owner_id,	
+		});
+
+		# output resource data in the manner your api defines.
+		...
+
+		return Apache2::Const::OK;
+
+	}
 
 =head2 error
 
@@ -377,16 +450,22 @@ sub new {
     my $r = shift;
     my $self = bless {
         request => $r,
-        oauth   => OAuth::Lite::ServerUtil->new,
-        realm   => undef,
-        secure  => 0,
-        mode    => PROTECTED_RESOURCE,
+        oauth => OAuth::Lite::ServerUtil->new,
+        realm => undef,
+        secure => 0,
+        mode => PROTECTED_RESOURCE,
+		accepts_consumer_request => 0,
+        params => {},
+        completed_validation => 0,
     }, $class;
     my $realm = $self->request->dir_config('Realm');
     $self->{realm} = $realm if $realm;
+    my $accept = $self->request->dir_config('AcceptConsumerRequest');
+    $self->{accepts_consumer_request} = $accept if $accept;
     my $mode = $self->request->dir_config('Mode');
+    my @valid_modes = (PROTECTED_RESOURCE, REQUEST_TOKEN, ACCESS_TOKEN);
     if ($mode) {
-        if (none { $mode eq $_ } (PROTECTED_RESOURCE, REQUEST_TOKEN, ACCESS_TOKEN)) {
+        if (none { $mode eq $_ } @valid_modes) {
             die "Invalid mode."; 
         } else {
             $self->{mode} = $mode;
@@ -419,14 +498,38 @@ sub request_body {
     $self->{_request_body};
 }
 
-sub __service {
+sub request_uri {
     my $self = shift;
+    return $self->request->uri;
+}
+
+sub request_method {
+    my $self = shift;
+    unless (defined $self->{_request_method}) {
+        my $method = uc($self->request->method);
+        my $x_method = uc($self->request->headers_in->{'X-HTTP-Method-Override'} || '');
+        if ($method eq 'POST' && ($x_method eq 'PUT' || $x_method eq 'DELETE')) {
+            $self->{_request_method} = $x_method;
+        } else {
+            $self->{_request_method} = $method;
+        }
+    }
+    return $self->{_request_method};
+}
+
+sub __service {
+
+    my $self = shift;
+
     my $realm;
     my $params = {};
+
     my $authorization = $self->request->headers_in->{Authorization};
     if ($authorization && $authorization =~ /^\s*OAuth/) {
         ($realm, $params) = parse_auth_header($authorization);
-    } elsif ( uc($self->request->method) eq 'POST'
+    }
+    
+    if ( $self->request_method() eq 'POST'
           &&  $self->request->headers_in->{'Content-Type'} =~ m!application/x-www-form-urlencoded!) {
         for my $pair (split /&/, $self->request_body) {
             my ($key, $value) = split /=/, $pair;
@@ -438,13 +541,16 @@ sub __service {
         $params->{$key} = decode_param($value);
     }
 
-    my $needs_to_check_token =  $self->__is_required_request_token
-                             ? 0
-                             : 1;
+    my $needs_to_check_token =  ( $self->is_required_request_token
+        || ( $self->is_required_protected_resource && $self->accepts_consumer_request ) )
+        ? 0
+        : 1;
 
     unless ($self->oauth->validate_params($params, $needs_to_check_token)) {
         return $self->errout(400, $self->oauth->errstr);
     }
+
+    $self->{params} = $params;
 
     my $consumer_key = $params->{oauth_consumer_key};
     my $timestamp    = $params->{oauth_timestamp};
@@ -466,19 +572,20 @@ sub __service {
 
     my $request_uri = $uri->as_string;
 
-    if ($self->__is_required_request_token) {
+    if ($self->is_required_request_token) {
 
         $self->oauth->verify_signature(
-            method          => $self->request->method, 
+            method          => $self->request_method(), 
             params          => $params,
             url             => $request_uri,
             consumer_secret => $consumer_secret,
         ) or return $self->errout(401, q{Invalid signature});
 
-        my $request_token = $self->publish_request_token($consumer_key);
+        my $request_token = $self->publish_request_token($consumer_key)
+            or return $self->errout(401, $self->errstr);
         return $self->__output_token($request_token);
 
-    } elsif ($self->__is_required_access_token) {
+    } elsif ($self->is_required_access_token) {
 
         my $token_value = $params->{oauth_token};
         my $token_secret = $self->get_request_token_secret($token_value);
@@ -486,7 +593,7 @@ sub __service {
             return $self->errout(401, $self->errstr || q{Invalid token}); 
         }
         $self->oauth->verify_signature(
-            method          => $self->request->method, 
+            method          => $self->request_method(), 
             params          => $params,
             url             => $request_uri,
             consumer_secret => $consumer_secret || '',
@@ -498,19 +605,24 @@ sub __service {
 
     } else {
 
-        my $token_value = $params->{oauth_token};
-        my $token_secret = $self->get_access_token_secret($token_value);
-        unless (defined $token_secret) {
-            return $self->errout(401, q{Invalid token});
+        my $token_secret = '';
+        if (exists $params->{oauth_token}) {
+            my $token_value = $params->{oauth_token};
+            $token_secret = $self->get_access_token_secret($token_value);
+            unless (defined $token_secret) {
+                return $self->errout(401, q{Invalid token});
+            }
         }
 
         $self->oauth->verify_signature(
-            method          => $self->request->method, 
+            method          => $self->request_method(), 
             params          => $params,
             url             => $request_uri,
             consumer_secret => $consumer_secret || '',
-            token_secret    => $token_secret || '',
+            token_secret    => $token_secret,
         ) or return $self->errout(401, q{Invalid signature});
+
+        $self->{completed_validation} = 1;
 
         return $self->service($params);
     }
@@ -527,14 +639,36 @@ sub __output_token {
     return Apache2::Const::OK;
 }
 
-sub __is_required_request_token {
+sub is_consumer_request {
+    my $self = shift;
+    unless ($self->is_required_protected_resource && $self->accepts_consumer_request) {
+        die qq(This method can be called only when accessing protected resource.
+            and accepts consumer-request.);
+    }
+    unless ($self->{completed_validation}) {
+        die qq(This method can be called only after validation);
+    }
+    return exists $self->{params}{oauth_token} ? 1 : 0;
+}
+
+sub is_required_request_token {
     my $self = shift;
     return ($self->{mode} eq REQUEST_TOKEN) ? 1 : 0;
 }
 
-sub __is_required_access_token {
+sub is_required_access_token {
     my $self = shift;
     return ($self->{mode} eq ACCESS_TOKEN) ? 1 : 0;
+}
+
+sub is_required_protected_resource {
+    my $self = shift;
+    return ($self->{mode} eq PROTECTED_RESOURCE) ? 1 : 0;
+}
+
+sub accepts_consumer_request {
+    my $self = shift;
+    return $self->{accepts_consumer_request};
 }
 
 sub service {
@@ -584,8 +718,8 @@ sub check_nonce_and_timestamp {
 
 sub set_authenticate_header {
     my $self = shift;
-    $self->request->err_headers_out->add( 'WWW-Authenticate',
-        sprintf(q{OAuth realm="%s"}, $self->realm));
+    my $header = sprintf(q{OAuth realm="%s"}, $self->realm);
+    $self->request->err_headers_out->add( 'WWW-Authenticate', $header );
 }
 
 sub errout {

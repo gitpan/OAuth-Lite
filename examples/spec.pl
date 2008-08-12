@@ -27,7 +27,14 @@ my $params = {
 
 my $base = OAuth::Lite::Util::create_signature_base_string($http_method, $request_url, $params);
 
+my $answer = q{GET&http%3A%2F%2Fphotos.example.net%2Fphotos&file%3Dvacation.jpg%26oauth_consumer_key%3Ddpf43f3p2l4k3l03%26oauth_nonce%3Dkllo9940pd9333jh%26oauth_signature_method%3DHMAC-SHA1%26oauth_timestamp%3D1191242096%26oauth_token%3Dnnch734d00sl2jdk%26oauth_version%3D1.0%26size%3Doriginal};
 say $base;
+say $answer;
+if ($base eq $answer) {
+    say "OK";
+} else {
+    say "NG";
+}
 
 my $key = q{kd94hf93k423kf44&pfkkdhi9sl3r4s00};
 #my $sign = Digest::SHA::hmac_sha1_base64($base, $key);

@@ -24,8 +24,10 @@ my $consumer = OAuth::Lite::Consumer->new(
     consumer_key     => $consumer_key,
     consumer_secret  => $consumer_secret,
     signature_method => 'HMAC-SHA1',
+    #signature_method => 'PLAINTEXT',
     http_method      => 'GET',
-    auth_method      => OAuth::Lite::AuthMethod::AUTH_HEADER,
+    auth_method      => OAuth::Lite::AuthMethod::URL_QUERY,
+    #auth_method      => OAuth::Lite::AuthMethod::AUTH_HEADER,
 );
 
 say "start to get request token";
@@ -43,10 +45,13 @@ my $atoken = $consumer->get_access_token( url => $access_token_url, token => $rt
 say $atoken->token;
 say $atoken->secret;
 
-my $res = $consumer->oauth_request(
+say Dumper($consumer->oauth_response);
+
+my $res = $consumer->request(
     method  => 'GET',
     url     => $resource_url,
     token   => $atoken,
 );
 
+say Dumper($res);
 say $res->content;

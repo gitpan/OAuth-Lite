@@ -398,13 +398,14 @@ You can omit this if you set realm on constructor.
 sub get_request_token {
     my ($self, %args) = @_;
     $args{url} ||= $self->request_token_url;
-    my $request_token_url = $args{url}
+    my $request_token_url = delete $args{url}
         or Carp::croak qq/get_request_token needs url in hash params
             or set request_token_path on constructor./;
-    my $realm = $args{realm} || $self->{realm} || '';
+    my $realm = delete $args{realm} || $self->{realm} || '';
     my $res = $self->__request(
-        realm => $realm,
-        url   => $request_token_url,
+        realm  => $realm,
+        url    => $request_token_url,
+        params => {%args},
     );
     unless ($res->is_success) {
         return $self->error($res->status_line);
@@ -531,7 +532,7 @@ sub gen_oauth_request {
         $content = $query;
     } else {
         my $header = $self->gen_auth_header($method, $url,
-            { realm => $realm, token => $token });
+            { realm => $realm, token => $token, extra => $extra });
         $headers->header( Authorization => $header );
         if (keys %$extra > 0) {
             my $data = join('&', map(sprintf(q{%s=%s},
@@ -656,7 +657,8 @@ OAuth::Lite::Token object(optional)
 
 sub gen_auth_header {
     my ($self, $method, $url, $args) = @_;
-    my $params = $self->gen_auth_params($method, $url, $args->{token});
+    my $extra = $args->{extra} || {};
+    my $params = $self->gen_auth_params($method, $url, $args->{token}, $extra);
     my $realm = $args->{realm} || '';
     my $authorization_header = build_auth_header($realm, $params);
     $authorization_header;
@@ -669,7 +671,7 @@ sub gen_auth_header {
 sub gen_auth_query {
     my ($self, $method, $url, $token, $extra) = @_;
     $extra ||= {};
-    my $params = $self->gen_auth_params($method, $url, $token);
+    my $params = $self->gen_auth_params($method, $url, $token, $extra);
     my %all = (%$extra, %$params);
     my $query = join('&', sort { $a cmp $b } 
         map(sprintf(q{%s=%s}, encode_param($_), encode_param($all{$_})),
@@ -703,8 +705,9 @@ If you pass token as third argument, the result includes oauth_token value.
 =cut
 
 sub gen_auth_params {
-    my ($self, $method, $url, $token) = @_;
+    my ($self, $method, $url, $token, $extra) = @_;
     my $params = {};
+    $extra ||= {};
     $params->{oauth_consumer_key} = $self->consumer_key || '';
     $params->{oauth_timestamp} = time();
     $params->{oauth_nonce} = gen_random_key();
@@ -723,7 +726,7 @@ sub gen_auth_params {
     if ($params->{oauth_signature_method} eq 'PLAINTEXT' && lc($url) !~ /^https/) {
         warn qq(PLAINTEXT signature method should be used on SSL/TSL.);
     }
-    my $base = create_signature_base_string($method, $url, $params);
+    my $base = create_signature_base_string($method, $url, {%$params, %$extra});
     $params->{oauth_signature} = $self->{signature_method}->new(
         consumer_secret => $consumer_secret, 
         token_secret    => $token_secret,

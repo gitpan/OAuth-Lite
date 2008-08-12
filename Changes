@@ -1,5 +1,16 @@
 Revision history for Perl extension OAuth::Lite.
 
+1.12  Tue Aug 12 17:58:00 2008
+    - bugfix: Consumer doesn't pass extra params when using Header authorization.
+    - Server::mod_perl2 now handles parameters correctly.
+
+1.10  Tue Aug 12 15:43:00 2008
+    - Consumer::get_request_token can be passed extra params.
+      Now you can pass the value except for uri or realm.
+      For example "scope" value for Google-OAuth.
+    - Server::mod_perl2 now got new APIs and can control
+      Consumer Request extention.
+
 1.09  Mon Mar 31 15:47:00 2008
     - Consumer::url_to_authorize and Consumer::get_access_token now can handles
       empty token.
