@@ -19,6 +19,7 @@ lib/OAuth/Lite/Consumer.pm
 lib/OAuth/Lite/Server/mod_perl2.pm
 lib/OAuth/Lite/Server/Test/Echo.pm
 lib/OAuth/Lite/ServerUtil.pm
+lib/OAuth/Lite/Problems.pm
 lib/OAuth/Lite/SignatureMethod.pm
 lib/OAuth/Lite/SignatureMethod/HMAC_SHA1.pm
 lib/OAuth/Lite/SignatureMethod/PLAINTEXT.pm

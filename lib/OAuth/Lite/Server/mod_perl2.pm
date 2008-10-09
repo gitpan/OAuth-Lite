@@ -13,12 +13,13 @@ use Apache2::ServerRec   ();
 use URI::Escape          ();
 use Apache2::Const -compile => qw(OK);
 
-use List::MoreUtils qw(none);
+use List::MoreUtils qw(none any);
 use bytes ();
 
 use OAuth::Lite::Util qw(:all);
 use OAuth::Lite::ServerUtil;
 use OAuth::Lite::AuthMethod qw(:all);
+use OAuth::Lite::Problems qw(:all);
 
 use base qw(
     Class::Accessor::Fast
@@ -29,7 +30,7 @@ use constant PROTECTED_RESOURCE => 'PROTECTED_RESOURCE';
 use constant REQUEST_TOKEN      => 'REQUEST_TOKEN';
 use constant ACCESS_TOKEN       => 'ACCESS_TOKEN';
 
-__PACKAGE__->mk_accessors(qw/request realm oauth/);
+__PACKAGE__->mk_accessors(qw/request realm oauth xrds_location/);
 
 =head1 NAME
 
@@ -249,6 +250,12 @@ create new access-token, and save it,
 and returns it as L<OAuth::Lite::Token> object.
 And disables the exchanged request-token.
 
+=head2 verify_requestor_approval($consumer_key, $requestor_id)
+
+When the request is for OpenSocial Reverse Phone Home,
+Check if the requestor has already given approval to consumer
+to access the requestor's data.
+
 =head2 service
 
 Handle protected resource.
@@ -264,7 +271,6 @@ This method should returns Apache2::Const::OK.
         my $resource = $user->get_my_some_resource();
 
         $self->request->status(200);
-        $self->set_authenticate_header();
         $self->request->content_type(q{text/html; charset=utf-8});
         $self->print($resource);
         return Apache2::Const::OK;
@@ -344,8 +350,58 @@ Check if current request requires protected-resource.
 
 =head2 is_consumer_request
 
-Chekc is the server accepts consumer-request and
+Chekc if the server accepts consumer-request and
 the request is for protected resource without token.
+
+=head2 is_reverse_phone_home
+
+Check if the server accepts open-social reverse-phone-home
+and the requests is for protected resource without token.
+
+=head2 xrds_location
+
+If you want to support OAuth Discovery, you need to
+prepare XRDS document, and set the location as XRDSLocation value.
+See below.
+
+  <Location /resource>
+  PerlSetVar Mode PROTECTED_RESOURCE
+  PerlSetVar XRDSLocation "http://myservice/discovery/xrdsdocument"
+  PerlResponseHandler MyServiceWithOAuth
+  </Location>
+
+
+Then you can get this url in your script.
+
+  sub service {
+    my $self = shift;
+    my $xrds_location = $self->xrds_location;
+  }
+
+But normalry all you have to do is write location on httpd.conf.
+And "errout" method automatically put it into response header properly.
+
+=head2 build_xrds
+
+In case client send request which includes application/xrds+xml in Accept header,
+if The server is set XRDSLocation as above, return resuponse with it in header.
+But you can also directly return XRDS-Document.
+
+Override build_xrds document.
+
+  sub build_xrds {
+    my $self = shift;
+    my $xrds = q{
+      <?xml version="1.0" encoding="UTF-8"?>
+      <XRDS xmlns="xri://$xrds">
+      ...
+      </XRDS>
+    };
+    return $xrds;
+  }
+
+If the server doesn't support both XRDSLocation and build_xrds overriding,
+The server doesn't support OAuth Discovery.
 
 =head2 accepts_consumer_request
 
@@ -392,6 +448,16 @@ Then override service method for protected resource.
 
 	}
 
+=head2 accepts_reverse_phone_home
+
+You can adopt OpenSocial Reverse Phone Home.
+
+	<Location /resource>
+	PerlSetVar Mode PROTECTED_RESOURCE
+	PerlSetVar AcceptReversePhoneHome 1
+	PerlResponseHandler MyServiceWithOAuth
+	</Location>
+
 =head2 error
 
 L<Class::ErrorHandler> method.
@@ -415,6 +481,18 @@ You can get error message that you set with error method.
     if (!$valid) {
         return $self->errout(401, $self->errstr);
     }
+
+=head2 output(%params)
+
+Simply output response.
+You can set 3 params, code, type and content.
+
+    return $self->output(
+        code    => 200,
+        type    => 'text/plain; charset=utf-8'
+        content => 'success',
+    );
+
 
 =head2 errout($code, $message)
 
@@ -455,13 +533,19 @@ sub new {
         secure => 0,
         mode => PROTECTED_RESOURCE,
 		accepts_consumer_request => 0,
+		accepts_reverse_phone_home => 0,
         params => {},
         completed_validation => 0,
     }, $class;
     my $realm = $self->request->dir_config('Realm');
     $self->{realm} = $realm if $realm;
-    my $accept = $self->request->dir_config('AcceptConsumerRequest');
-    $self->{accepts_consumer_request} = $accept if $accept;
+    my $accept_cr = $self->request->dir_config('AcceptConsumerRequest');
+    $self->{accepts_consumer_request} = 1 if $accept_cr;
+    my $accept_rp = $self->request->dir_config('AcceptReversePhoneHome');
+    if ($accept_rp) {
+        $self->{accepts_reverse_phone_home} = 1;
+        $self->allow_extra_param('xoauth_requestor_id');
+    }
     my $mode = $self->request->dir_config('Mode');
     my @valid_modes = (PROTECTED_RESOURCE, REQUEST_TOKEN, ACCESS_TOKEN);
     if ($mode) {
@@ -471,6 +555,8 @@ sub new {
             $self->{mode} = $mode;
         }
     }
+    my $xrds_location = $self->request->dir_config('XRDSLocation');
+    $self->{xrds_location} = $xrds_location if $xrds_location;
     if ( ($INC{'Apache2/ModSSL.pm'} && $r->connection->is_https)
       || ($r->subprocess_env('HTTPS') && $r->subprocess_env('HTTPS') eq 'ON') ) {
         $self->{secure} = 1;
@@ -523,12 +609,19 @@ sub __service {
 
     my $realm;
     my $params = {};
+    my $is_authorized = 0;
+
+    my $needs_to_check_token = ( $self->is_required_request_token
+        || (   $self->is_required_protected_resource
+            && ($self->accepts_consumer_request || $self->accepts_reverse_phone_home) ) )
+        ? 0
+        : 1;
 
     my $authorization = $self->request->headers_in->{Authorization};
     if ($authorization && $authorization =~ /^\s*OAuth/) {
         ($realm, $params) = parse_auth_header($authorization);
     }
-    
+
     if ( $self->request_method() eq 'POST'
           &&  $self->request->headers_in->{'Content-Type'} =~ m!application/x-www-form-urlencoded!) {
         for my $pair (split /&/, $self->request_body) {
@@ -536,15 +629,11 @@ sub __service {
             $params->{$key} = decode_param($value);
         }
     }
+
     for my $pair (split /&/, $self->request->args) {
         my ($key, $value) = split /=/, $pair;
         $params->{$key} = decode_param($value);
     }
-
-    my $needs_to_check_token =  ( $self->is_required_request_token
-        || ( $self->is_required_protected_resource && $self->accepts_consumer_request ) )
-        ? 0
-        : 1;
 
     unless ($self->oauth->validate_params($params, $needs_to_check_token)) {
         return $self->errout(400, $self->oauth->errstr);
@@ -558,19 +647,13 @@ sub __service {
 
     my $consumer_secret = $self->get_consumer_secret($consumer_key);
     unless (defined $consumer_secret) {
-        return $self->errout(401, $self->errstr || q{Invalid consumer key});
+        return $self->errout(401, $self->errstr||CONSUMER_KEY_UNKNOWN);
     }
 
     $self->check_nonce_and_timestamp($consumer_key, $nonce, $timestamp)
-        or return $self->errout(400, $self->errstr || q{Invalid parameter});
+        or return $self->errout(400, $self->errstr||TIMESTAMP_REFUSED);
 
-    my $uri = URI->new;
-    $uri->scheme( $self->{secure} ? 'https' : 'http' );
-    $uri->host( $self->request->get_server_name );
-    $uri->port( $self->request->get_server_port );
-    $uri->path( $self->request->uri );
-
-    my $request_uri = $uri->as_string;
+    my $request_uri = $self->__build_request_uri();
 
     if ($self->is_required_request_token) {
 
@@ -579,7 +662,7 @@ sub __service {
             params          => $params,
             url             => $request_uri,
             consumer_secret => $consumer_secret,
-        ) or return $self->errout(401, q{Invalid signature});
+        ) or return $self->errout(401, $self->oauth->errstr||SIGNATURE_INVALID);
 
         my $request_token = $self->publish_request_token($consumer_key)
             or return $self->errout(401, $self->errstr);
@@ -590,7 +673,7 @@ sub __service {
         my $token_value = $params->{oauth_token};
         my $token_secret = $self->get_request_token_secret($token_value);
         unless (defined $token_secret) {
-            return $self->errout(401, $self->errstr || q{Invalid token}); 
+            return $self->errout(401, $self->errstr||TOKEN_REJECTED); 
         }
         $self->oauth->verify_signature(
             method          => $self->request_method(), 
@@ -598,7 +681,7 @@ sub __service {
             url             => $request_uri,
             consumer_secret => $consumer_secret || '',
             token_secret    => $token_secret || '',
-        ) or return $self->errout(401, q{Invalid signature});
+        ) or return $self->errout(401, $self->oauth->errstr||SIGNATURE_INVALID);
         my $access_token = $self->publish_access_token($consumer_key, $token_value)
             or return $self->errout(401, $self->errstr);
         return $self->__output_token($access_token);
@@ -610,7 +693,7 @@ sub __service {
             my $token_value = $params->{oauth_token};
             $token_secret = $self->get_access_token_secret($token_value);
             unless (defined $token_secret) {
-                return $self->errout(401, q{Invalid token});
+                return $self->errout(401, $self->errstr||TOKEN_REJECTED);
             }
         }
 
@@ -620,7 +703,12 @@ sub __service {
             url             => $request_uri,
             consumer_secret => $consumer_secret || '',
             token_secret    => $token_secret,
-        ) or return $self->errout(401, q{Invalid signature});
+        ) or return $self->errout(401, $self->oauth->errstr||SIGNATURE_INVALID);
+
+        if ($self->is_reverse_phone_home) {
+            $self->verify_requestor_approval($consumer_key, $params->{xoauth_requestor_id})
+                or return $self->errout(401, q{No approval});
+        }
 
         $self->{completed_validation} = 1;
 
@@ -628,27 +716,73 @@ sub __service {
     }
 }
 
+sub __build_request_uri {
+
+    # borrowed from Catalyst::Engine::Apache
+    my $self = shift;
+
+    my $scheme = $self->{secure} ? 'https' : 'http';
+    my $host   = $self->request->hostname || 'localhost';
+    my $port   = $self->request->get_server_port;
+
+    PROXY_CHECK: {
+        last PROXY_CHECK unless $self->request->headers_in->{'X-Forwarded-Host'};
+        
+        $host = $self->request->headers_in->{'X-Forwarded-Host'};
+
+        if ( $host =~ /^(.+):(\d+)$/ ) {
+            $host = $1;
+            $port = $2;
+        } else {
+            $port = $self->{secure} ? 443 : 80;
+        }
+    }
+
+    my $base_path = '';
+
+    my $location = $self->request->location;
+    if ( $location && $location ne '/' ) {
+        $base_path = $location;
+    }
+   
+    if ($host !~ /:/ ) {
+        $host .= ":$port";
+    }
+
+    my ($path) = split /\?/, $self->request->unparsed_uri;
+
+    if ( $base_path =~ m/[$URI::uric]/o ) {
+        my $match = qr/($base_path)/;
+        my ($base_match) = $path =~ $match;
+        $base_path = $base_match;
+    }
+
+    $path =~ s{^/+}{};
+    $base_path = '/' unless length $base_path;
+    if ( $base_path ne '/' && $base_path ne $path && $base_path =~ m{/$path} ) {
+        $path = $base_path;
+        $path =~ s{^/+}{};
+    }
+    my $request_uri  = $scheme . '://' . $host . '/' . $path;
+    return $request_uri;
+
+}
+
 sub __output_token {
     my ($self, $token) = @_;
     my $token_string = $token->as_encoded;
-    $self->set_authenticate_header();
-    $self->request->status(200);
-    $self->request->content_type(q{text/plain; charset=utf-8});
-    $self->request->set_content_length(bytes::length($token_string));
-    $self->request->print($token_string);
-    return Apache2::Const::OK;
+    return $self->output(
+        code    => 200,
+        type    => q{text/plain; charset=utf-8},
+        content => $token_string,
+    );
 }
 
 sub is_consumer_request {
     my $self = shift;
-    unless ($self->is_required_protected_resource && $self->accepts_consumer_request) {
-        die qq(This method can be called only when accessing protected resource.
-            and accepts consumer-request.);
-    }
-    unless ($self->{completed_validation}) {
-        die qq(This method can be called only after validation);
-    }
-    return exists $self->{params}{oauth_token} ? 1 : 0;
+    return ($self->is_required_protected_resource
+        && $self->accepts_consumer_request
+        && !exists $self->{params}{oauth_token}) ? 1 : 0;
 }
 
 sub is_required_request_token {
@@ -669,6 +803,11 @@ sub is_required_protected_resource {
 sub accepts_consumer_request {
     my $self = shift;
     return $self->{accepts_consumer_request};
+}
+
+sub accepts_reverse_phone_home {
+    my $self = shift;
+    return $self->{accepts_reverse_phone_home};
 }
 
 sub service {
@@ -718,17 +857,79 @@ sub check_nonce_and_timestamp {
 
 sub set_authenticate_header {
     my $self = shift;
-    my $header = sprintf(q{OAuth realm="%s"}, $self->realm);
-    $self->request->err_headers_out->add( 'WWW-Authenticate', $header );
+    my $problem = shift;
+    my %params = ();
+    $params{realm} = $self->realm if $self->realm;
+    $params{oauth_problem} = $problem if $problem;
+    my $header = "OAuth " . join(", ", map sprintf(q{%s="%s"}, $_, $params{$_}), keys %params);
+    $self->request->err_headers_out->add('WWW-Authenticate', $header);
+}
+
+sub _check_if_request_accepts_xrds {
+    my $self = shift;
+    unless (defined $self->{__request_accepts_xrds}) {
+        my $accept = $self->request->headers_in->{Accept} || '';
+        my @types = map { (split ";", $_)[0] } split /\*s,\*s/, $accept;
+        if (any { $_ eq q{application/xrds+xml} } @types) {
+            $self->{__request_accepts_xrds} = 1;
+        } else {
+            $self->{__request_accepts_xrds} = 0;
+        }
+    }
+    return $self->{__request_accepts_xrds};
+}
+
+sub build_xrds {
+  my $self = shift;
+  return;
 }
 
 sub errout {
-    my ($self, $code, $message) = @_;
-    $self->set_authenticate_header();
+    my ($self, $code, $message, $description) = @_;
+
+    if ( ( $self->request_method() eq 'GET'
+        || $self->request_method() eq 'HEAD') && 
+        $self->is_required_protected_resource &&
+        $self->_check_if_request_accepts_xrds ) {
+        if ($self->xrds_locaton) {
+            $self->request->status(200);
+            $self->request->err_headers_out->add('X-XRDS-Location' => $self->xrds_location);
+            return Apache2::Const::OK;
+        } elsif ($self->request_method() eq 'GET' && 
+            (my $xrds = $self->build_xrds())) {
+            return $self->output(
+                code    => 200,
+                type    => q{application/xrds+xml},
+                content => $xrds,
+            );
+        }
+    }
+    my $problem;
+    if (OAuth::Lite::Problems->match($message)) {
+       $problem = $message; 
+       $message = sprintf(q{oauth_problem=%s}, $message);
+    }
+
+    $self->set_authenticate_header($problem);
+    return $self->output(
+        code    => $code, 
+        type    => q{text/plain; charset=utf-8},
+        content => $message,
+    );
+}
+
+sub output {
+    my $self = shift;
+    my %args = @_;
+    my $code = $args{code} || 200;
+    my $type = $args{type} || q{text/plain; charset=utf-8};
+    my $content = $args{content} || '';
     $self->request->status($code);
-    $self->request->content_type(q{text/plain; charset=utf-8});
-    $self->request->set_content_length(bytes::length($message));
-    $self->request->print($message);
+    if ($content) {
+        $self->request->content_type($type);
+        $self->request->set_content_length(bytes::length($content));
+        $self->request->print($content);
+    }
     return Apache2::Const::OK;
 }
 
@@ -752,6 +953,19 @@ sub support_signature_methods {
     $self->oauth->support_signature_methods(@_);
 }
 
+sub is_reverse_phone_home {
+    my $self = shift;
+    return ( $self->is_required_protected_resource
+        && $self->accepts_reverse_phone_home
+        && !exists $self->{param}{oauth_token}
+        && exists $self->{params}{xoauth_requestor_id}) ? 1 : 0
+}
+
+sub verify_requestor_approval {
+    my $self = shift;
+    my ($consumer_key, $user_id) = @_;
+    return 1;
+}
 
 =head1 SEE ALSO
 

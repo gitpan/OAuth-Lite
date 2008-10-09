@@ -1,5 +1,11 @@
 Revision history for Perl extension OAuth::Lite.
 
+1.13  Thu Oct 08 10:34:00 2008
+    - Consumer now doesn't inherit LWP::UserAgent but delegate.
+    - Server::mod_perl2: fixed point that building regularized uri for proxy usage. borrowed code from Catalyst::Engine::Apache.
+    - Server::mod_perl2 now pushes error response according to OAuth Problem Reporting. but not completed yet.
+    - Server::mod_perl2 now handles XRDS if you set XRDSLocation on httpd.conf or directly override 'build_xrds' method, according to OAuth Discovery spec.
+
 1.12  Tue Aug 12 17:58:00 2008
     - bugfix: Consumer doesn't pass extra params when using Header authorization.
     - Server::mod_perl2 now handles parameters correctly.

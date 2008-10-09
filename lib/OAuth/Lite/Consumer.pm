@@ -4,7 +4,6 @@ use strict;
 use warnings;
 
 use base qw(
-    LWP::UserAgent
     Class::ErrorHandler
     Class::Accessor::Fast
 );
@@ -24,6 +23,7 @@ __PACKAGE__->mk_accessors(qw(
 use Carp ();
 use bytes ();
 use URI;
+use LWP::UserAgent;
 use HTTP::Request;
 use HTTP::Headers;
 use UNIVERSAL::require;
@@ -234,13 +234,14 @@ Or
 
 sub new {
     my ($class, %args) = @_;
-    my %args_for_parent = %args;
-    delete $args_for_parent{$_}
-        for qw/consumer_key consumer_secret signature_method http_method auth_method realm
-        site request_token_path access_token_path authorize_path
-        callback_url/;
-    my $self = $class->SUPER::new(%args_for_parent);
-    $self = bless $self, $class;
+    my $ua = delete $args{ua};
+    unless ($ua) { 
+        $ua = LWP::UserAgent->new;
+        $ua->agent(join "/", __PACKAGE__, $OAuth::Lite::VERSION);
+    }
+    my $self = bless {
+        ua => $ua,
+    }, $class;
     $self->_init(%args);
     $self;
 }
@@ -280,7 +281,6 @@ sub _init {
     $self->{callback_url} = $args{callback_url};
     $self->{oauth_request} = undef;
     $self->{oauth_response} = undef;
-    $self->agent($args{agent} || join('/', __PACKAGE__, $OAuth::Lite::VERSION));
 }
 
 =head2 request_token_url
@@ -614,7 +614,7 @@ sub __request {
     my $req = $self->gen_oauth_request(%args);
     $self->oauth_clear();
     $self->oauth_request($req);
-    my $res = $self->SUPER::request($req);
+    my $res = $self->{ua}->request($req);
     $self->oauth_response($res);
     $res;
 }

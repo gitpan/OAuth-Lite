@@ -9,6 +9,7 @@ use OAuth::Lite::Util qw(
     decode_param
     create_signature_base_string
 );
+use OAuth::Lite::Problems qw(:all);
 use List::MoreUtils qw(any none);
 use UNIVERSAL::require;
 use Carp ();
@@ -243,7 +244,7 @@ sub verify_signature {
 
     my $base_string = create_signature_base_string($http_method, $url, $params);
     unless ($self->validate_signature_method($signature_method)) {
-        return $self->error(qq/Unsupported signature method/);
+        return $self->error(SIGNATURE_METHOD_REJECTED);
     }
     my $method_class = $self->{supported_signature_methods}{$signature_method};
     my $method = $method_class->new(
@@ -251,7 +252,7 @@ sub verify_signature {
         token_secret    => $token_secret,
     );
     unless ($method->verify($base_string, $signature)) {
-        return $self->error(qq/Invalid signature/);
+        return $self->error(SIGNATURE_INVALID);
     }
     1;
 }
