@@ -1,5 +1,9 @@
 Revision history for Perl extension OAuth::Lite.
 
+1.14  San Oct 19 15:37:00 2008
+    - Consumer and Util now can handle arrayref parameters for such as checkbox values.
+      Thanks to Evaldas Imbrasas.
+
 1.13  Thu Oct 08 10:34:00 2008
     - Consumer now doesn't inherit LWP::UserAgent but delegate.
     - Server::mod_perl2: fixed point that building regularized uri for proxy usage. borrowed code from Catalyst::Engine::Apache.

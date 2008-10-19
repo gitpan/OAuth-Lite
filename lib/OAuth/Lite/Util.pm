@@ -17,6 +17,7 @@ our %EXPORT_TAGS = ( all => [qw/
     create_signature_base_string
     parse_auth_header
     build_auth_header
+    normalize_params
 /]);
 
 our @EXPORT_OK = map { @$_ } values %EXPORT_TAGS;
@@ -111,6 +112,9 @@ sub decode_param {
 sub create_signature_base_string {
     my ($method, $url, $params) = @_;
     $method = uc $method;
+    $params = {%$params};
+    delete $params->{oauth_signature};
+    delete $params->{realm};
     my $normalized_request_url = normalize_request_url($url);
     my $normalized_params = normalize_params($params);
     my $signature_base_string = join('&', map(encode_param($_),
@@ -155,9 +159,20 @@ according to the way OAuth Core spec defines.
 
 sub normalize_params {
     my $params = shift;
-    join('&', sort { $a cmp $b }
-        map(sprintf(q{%s=%s}, encode_param($_), encode_param($params->{$_})),
-        grep { $_ ne 'realm' && $_ ne 'oauth_signature' } keys %$params));
+    my @pairs = ();
+    for my $k (keys %$params) {
+        if (!ref $params->{$k}) {
+            push @pairs, 
+                sprintf(q{%s=%s}, encode_param($k), encode_param($params->{$k}));
+        }
+        elsif (ref $params->{$k} eq 'ARRAY') {
+            for my $v (@{ $params->{$k} }) {
+                push @pairs, 
+                    sprintf(q{%s=%s}, encode_param($k), encode_param($v));
+            }
+        }
+    }
+    return join('&', sort { $a cmp $b } @pairs);
 }
 
 =head2 parse_auth_header($header)
@@ -208,7 +223,7 @@ sub build_auth_header {
     my $head = sprintf q{OAuth realm="%s"}, $realm || '';
     my $authorization_header = join(', ', $head,
         sort { $a cmp $b } map(sprintf(q{%s="%s"}, encode_param($_), encode_param($params->{$_})),
-            grep { /^oauth_/ || /^xoauth_/ } keys %$params));
+            grep { /^x?oauth_/ } keys %$params));
     $authorization_header;
 }
 

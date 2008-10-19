@@ -1,4 +1,4 @@
-use Test::More tests => 16;
+use Test::More tests => 18;
 
 use OAuth::Lite::Util;
 
@@ -51,4 +51,34 @@ is($parsed->{oauth_timestamp},        '1191242096');
 is($parsed->{oauth_nonce},            'kllo9940pd9333jh');
 is($parsed->{oauth_version},          '1.0');
 
+my $params_include_array = {
+	oauth_consumer_key     => 'dpf43f3p214k3103',
+	oauth_token            => 'nnch734d00s12jdk',
+	oauth_signature_method => 'HMAC-SHA1',
+	oauth_timestamp        => '1191242096',
+	oauth_nonce            => 'kllo9940pd9333jh',
+	oauth_version          => '1.0',
+	file                   => 'vacation.jpg',
+	size                   => 'original',
+    selected               => [ 1, 2, 3 ],
+};
+
+my $base2 = OAuth::Lite::Util::create_signature_base_string($http_method, $request_url, $params_include_array);
+is($base2, q{GET&http%3A%2F%2Fphotos.example.net%2Fphotos&file%3Dvacation.jpg%26oauth_consumer_key%3Ddpf43f3p214k3103%26oauth_nonce%3Dkllo9940pd9333jh%26oauth_signature_method%3DHMAC-SHA1%26oauth_timestamp%3D1191242096%26oauth_token%3Dnnch734d00s12jdk%26oauth_version%3D1.0%26selected%3D1%26selected%3D2%26selected%3D3%26size%3Doriginal});
+
+my $params_include_invalidtype = {
+	oauth_consumer_key     => 'dpf43f3p214k3103',
+	oauth_token            => 'nnch734d00s12jdk',
+	oauth_signature_method => 'HMAC-SHA1',
+	oauth_timestamp        => '1191242096',
+	oauth_nonce            => 'kllo9940pd9333jh',
+	oauth_version          => '1.0',
+	file                   => 'vacation.jpg',
+	size                   => 'original',
+    selected               => { unknown => 'type' },
+};
+
+my $base3 = OAuth::Lite::Util::create_signature_base_string($http_method, $request_url, $params_include_invalidtype);
+# throughed unknown type
+is($base3, q{GET&http%3A%2F%2Fphotos.example.net%2Fphotos&file%3Dvacation.jpg%26oauth_consumer_key%3Ddpf43f3p214k3103%26oauth_nonce%3Dkllo9940pd9333jh%26oauth_signature_method%3DHMAC-SHA1%26oauth_timestamp%3D1191242096%26oauth_token%3Dnnch734d00s12jdk%26oauth_version%3D1.0%26size%3Doriginal});
 

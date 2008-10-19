@@ -535,8 +535,8 @@ sub gen_oauth_request {
             { realm => $realm, token => $token, extra => $extra });
         $headers->header( Authorization => $header );
         if (keys %$extra > 0) {
-            my $data = join('&', map(sprintf(q{%s=%s},
-                encode_param($_), encode_param($extra->{$_}) ), keys %$extra));
+            my $data = normalize_params($extra);
+            #my $data = join('&', @extra_pairs);
             if (any { $method eq $_ } @send_data_methods) {
                 $content = $data;
             } else {
@@ -676,7 +676,7 @@ sub gen_auth_query {
     my $query = join('&', sort { $a cmp $b } 
         map(sprintf(q{%s=%s}, encode_param($_), encode_param($all{$_})),
         keys %all));
-    $query;
+    normalize_params({%all});
 }
 
 =head2 gen_auth_params($http_method, $request_url, [$token])
