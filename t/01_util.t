@@ -60,7 +60,7 @@ my $params_include_array = {
 	oauth_version          => '1.0',
 	file                   => 'vacation.jpg',
 	size                   => 'original',
-    selected               => [ 1, 2, 3 ],
+  selected               => [ 1, 2, 3 ],
 };
 
 my $base2 = OAuth::Lite::Util::create_signature_base_string($http_method, $request_url, $params_include_array);

@@ -1,16 +1,22 @@
-abstract: OAuth framework
-author: Lyo Kato, C<lyo.kato _at_ gmail.com>
-build_requires: 
+---
+abstract: 'OAuth framework'
+author:
+  - 'Lyo Kato, C<lyo.kato _at_ gmail.com>'
+build_requires:
   Test::More: 0
 distribution_type: module
-generated_by: Module::Install version 0.64
+generated_by: 'Module::Install version 0.77'
 license: perl
+meta-spec:
+  url: http://module-build.sourceforge.net/META-spec-v1.4.html
+  version: 1.4
 name: OAuth-Lite
-no_index: 
-  directory: 
+no_index:
+  directory:
     - inc
     - t
-requires: 
+    - examples
+requires:
   Class::Accessor: 0.31
   Class::Data::Accessor: 0.04001
   Class::ErrorHandler: 0.01
@@ -22,4 +28,6 @@ requires:
   MIME::Base64: 3.07
   UNIVERSAL::require: 0.11
   URI: 1.35
-version: 1.14
+resources:
+  license: http://dev.perl.org/licenses/
+version: 1.15
