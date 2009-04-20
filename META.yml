@@ -30,4 +30,4 @@ requires:
   URI: 1.35
 resources:
   license: http://dev.perl.org/licenses/
-version: 1.17
+version: 1.18
