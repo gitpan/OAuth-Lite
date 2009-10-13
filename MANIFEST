@@ -3,6 +3,7 @@ examples/echo_client.pl
 examples/generate_rsa_keys.pl
 examples/spec.pl
 examples/termie.pl
+examples/twitter.pl
 inc/Module/Install.pm
 inc/Module/Install/Base.pm
 inc/Module/Install/Can.pm
@@ -40,6 +41,5 @@ t/04_serverutil.t
 t/05_consumer.t
 t/06_authmethod.t
 t/07_signing_requests.t
-t/98_perlcritic.t
 t/99_pod.t
 t/99_pod_coverage.t
